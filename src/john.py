@@ -1,5 +1,4 @@
 import os
-
 import discord
 import yaml
 from discord.commands.context import ApplicationContext
@@ -46,6 +45,31 @@ async def skip(ctx: ApplicationContext, arg: str = None):
     else:
         await ctx.voice_client.disconnect()
         await ctx.respond("queue is empty, disconnecting", delete_after=5)
+
+
+@bot.slash_command(
+    name="vote", description="Creates a vote with up to 9 options.", guild_ids=bot.guilds
+)
+async def vote(ctx: ApplicationContext, prompt: str, options: str):
+    options_list = [x.strip() for x in options.split(",")]
+    if len(options_list) > 9:
+        await ctx.respond("too many options...", ephemeral=True, delete_after=5)
+
+    await ctx.respond("creating vote...", ephemeral=True, delete_after=5)
+
+    reactions = list()
+    content = prompt + "\n"
+    for idx, value, in enumerate(options_list):
+        if value.strip():
+            emoji = chr(49+idx) + "\U0000FE0F\U000020E3"  # Unicode emoji numbers 1-9
+            reactions.append(emoji)
+            content += f"{emoji}: {value}\n"
+    content 
+
+    message: discord.Message = await ctx.channel.send(content)
+
+    for emoji in reactions:
+        await message.add_reaction(emoji)
 
 
 @bot.event
