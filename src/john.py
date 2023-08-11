@@ -1,50 +1,65 @@
-import os
-import discord
 import yaml
+import discord
 from discord.commands.context import ApplicationContext
 from discord.ext import commands
 
+from music import MusicQueue
+
 
 bot = commands.Bot()
-vc: discord.VoiceClient
-queue = []
+vc: discord.VoiceClient = None
+mq = MusicQueue()
 
-with open(f"{os.getcwd()}/token.yaml") as file:
+
+with open("./config.yaml") as file:
     token = yaml.safe_load(file)["token"]
 
 
 @bot.slash_command(
     name="play", description="Adds a song to the queue.", guild_ids=bot.guilds
 )
-async def play(ctx: ApplicationContext, arg: str):
+async def play(ctx: ApplicationContext, song_name: str):
     global vc
+    
     if not ctx.author.voice:
-        await ctx.respond("member not in voice channel", delete_after=5)
+        await ctx.respond("You are not in a voice channel.", ephemeral=True, delete_after=5)
         return
 
-    if vc and vc.is_connected():
-        await vc.disconnect()
+    await ctx.defer()
+    try:
+        mq.add_song(song_name)
+        await ctx.followup.send(f"Successfully queued '{song_name}'.", delete_after=5)
+    except Exception as e:
+        await ctx.followup.send(f"Failed to queue '{song_name}'.", delete_after=5)
+        print(e)
 
-    vc = await ctx.author.voice.channel.connect()  # TODO: add song to queue
-    await ctx.respond("playing song", delete_after=5)
+    if not vc:
+        vc = await ctx.author.voice.channel.connect()
+
+    if not vc.is_playing():
+        source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(mq.queue.pop(0)), volume=0.1)
+        vc.play(source)
 
 
 @bot.slash_command(
     name="skip", description="Skips the current song.", guild_ids=bot.guilds
 )
-async def skip(ctx: ApplicationContext, arg: str = None):
+async def skip(ctx: ApplicationContext):
     global vc
 
     if not ctx.author.voice:
-        await ctx.respond("member not in voice channel", delete_after=5)
+        await ctx.respond("You are not in a voice channel.", ephemeral=True, delete_after=5)
+        return 
     if not vc or not vc.is_connected():
-        await ctx.respond("bot not in voice channel", delete_after=5)
+        await ctx.respond("Nothing is playing right now.", ephemeral=True, delete_after=5)
+        return
 
-    if queue:  # TODO: skip song, download and play next
-        await ctx.respond("skipping current song", delete_after=5)
-    else:
-        await ctx.voice_client.disconnect()
-        await ctx.respond("queue is empty, disconnecting", delete_after=5)
+    await ctx.respond("Skipping current song.", delete_after=5)
+
+    vc.stop()
+    if len(mq.queue) > 0:
+        source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(mq.queue.pop(0)), volume=0.1)
+        vc.play(source)
 
 
 @bot.slash_command(

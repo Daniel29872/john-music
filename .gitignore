@@ -1,2 +1,5 @@
 .env
+downloads
+__pycache__
 *.yaml
+*.exe
